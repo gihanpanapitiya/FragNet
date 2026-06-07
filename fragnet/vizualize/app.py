@@ -6,6 +6,7 @@ from fragnet.vizualize.viz import FragNetVizApp
 from fragnet.vizualize.model import FragNetPreTrainViz
 from streamlit_ketcher import st_ketcher
 from fragnet.vizualize.model_attr import get_attr_image
+from fragnet.vizualize.optimizer import optimize_molecule, mol_to_image
 # Initial page config
 
 st.set_page_config(
@@ -188,8 +189,8 @@ try:
     with st.spinner("🔄 Calculating contributions..."):
         df_atom_contrib, df_bond_contrib, df_fbond_contrib = viz.get_all_contributions(prop_type)
 
-    tab_atoms, tab_bonds, tab_frags, tab_fconn = st.tabs([
-        "⚛️ Atoms", "🔗 Bonds", "🧩 Fragments", "🔀 Fragment Connections"
+    tab_atoms, tab_bonds, tab_frags, tab_fconn, tab_opt = st.tabs([
+        "⚛️ Atoms", "🔗 Bonds", "🧩 Fragments", "🔀 Fragment Connections", "🔬 Optimizer"
     ])
 
     with tab_atoms:
@@ -295,6 +296,232 @@ try:
                                    ['Connection Index', 'Begin Fragment', 'End Fragment', 'Contribution'])
             else:
                 st.info("Single fragment molecule — no inter-fragment connections.")
+
+    # -------------------------------------------------------------------------
+    # Optimizer tab
+    # -------------------------------------------------------------------------
+    with tab_opt:
+        st.subheader("Contribution-Guided Fragment Optimizer")
+        st.markdown(
+            "FragNet identifies which fragments hurt the target property most. "
+            "The optimizer replaces them with BRICS-compatible alternatives and "
+            "re-scores every candidate in a single batch."
+        )
+        st.markdown("---")
+
+        from fragnet.vizualize.optimizer import get_core_protected_indices, get_fragment_atom_map
+
+        # Pre-computed contributions carried from the Fragments tab
+        frag_contrib_df = pd.DataFrame(frag_contributions)
+        all_frag_indices = sorted(frag_contrib_df["fragment_index"].tolist())
+        frag_atom_map = get_fragment_atom_map(selected)
+
+        # ── Core / scaffold locking ──────────────────────────────────────────
+        st.subheader("🔒 Core / Scaffold Lock")
+        st.markdown(
+            "Fragments overlapping the core will be **protected** from swapping. "
+            "Only peripheral fragments will be optimized."
+        )
+        lock_col1, lock_col2 = st.columns([2, 1])
+        with lock_col1:
+            core_smiles_input = st.text_input(
+                "Core SMILES or SMARTS",
+                value="",
+                placeholder="e.g. c1ccccc1  or  leave blank to lock by fragment index",
+                help="Substructure that must be preserved. Accepts SMILES or SMARTS.",
+            )
+        with lock_col2:
+            manual_lock = st.multiselect(
+                "Or lock specific fragment indices",
+                options=all_frag_indices,
+                default=[],
+                help="Fragments selected here will not be swapped regardless of their contribution.",
+            )
+
+        # Resolve protected set: union of core-matched + manually locked
+        core_protected: set = set()
+        core_match_valid = False
+        if core_smiles_input.strip():
+            core_protected = get_core_protected_indices(selected, core_smiles_input.strip())
+            core_match_valid = len(core_protected) > 0
+            if not core_match_valid:
+                st.warning("Core substructure not found in the molecule — check your SMILES/SMARTS.")
+
+        protected_indices: set = core_protected | set(manual_lock)
+
+        # Fragment status table
+        status_rows = []
+        for frag in frag_contributions:
+            fid = frag["fragment_index"]
+            contrib = frag["contribution"]
+            atoms = frag_atom_map[fid] if fid < len(frag_atom_map) else []
+            locked = fid in protected_indices
+            status_rows.append({
+                "Frag #": fid,
+                "Atom Indices": str(atoms),
+                "Contribution": round(contrib, 4),
+                "Status": "🔒 Locked" if locked else "🔓 Available",
+            })
+        status_df = pd.DataFrame(status_rows)
+
+        n_available = len([r for r in status_rows if r["Status"] == "🔓 Available"])
+        st.markdown(
+            f"**{n_available} / {len(all_frag_indices)} fragments available for swapping**"
+            + (f" · {len(protected_indices)} locked" if protected_indices else "")
+        )
+        st.dataframe(
+            status_df.style
+            .applymap(highlight_contribution, subset=["Contribution"])
+            .applymap(lambda v: "background-color: #ffe0b2" if "🔒" in str(v) else "", subset=["Status"]),
+            hide_index=True,
+            use_container_width=True,
+            height=min(200, 40 + 35 * len(status_rows)),
+        )
+
+        # ── Optimization settings ────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("⚙️ Settings")
+        cfg_col1, cfg_col2, cfg_col3 = st.columns(3)
+        with cfg_col1:
+            opt_direction = st.selectbox(
+                "Optimization direction",
+                ["maximize", "minimize"],
+                help="maximize → higher value is better (e.g. solubility); minimize → lower is better",
+            )
+        with cfg_col2:
+            n_worst = st.slider(
+                "Fragments to target", min_value=1,
+                max_value=min(3, max(1, n_available)),
+                value=1,
+                help="Number of worst-contributing eligible fragments to swap",
+            )
+        with cfg_col3:
+            max_candidates = st.slider(
+                "Max candidates to score", min_value=10, max_value=100, value=50, step=10,
+                help="More candidates = more coverage but slower",
+            )
+
+        # Preview which fragments will actually be targeted
+        ascending = (opt_direction == "maximize")
+        eligible_df = frag_contrib_df[~frag_contrib_df["fragment_index"].isin(protected_indices)]
+        worst_preview = eligible_df.sort_values("contribution", ascending=ascending).head(n_worst)
+
+        st.markdown("**Fragments targeted for replacement:**")
+        preview_df = worst_preview[["fragment_index", "atoms", "contribution"]].copy()
+        preview_df["atoms"] = preview_df["atoms"].apply(
+            lambda x: str(list(x)) if hasattr(x, "__iter__") else str(x)
+        )
+        preview_df.columns = ["Fragment Index", "Atom Indices", "Contribution"]
+        if preview_df.empty:
+            st.warning("No eligible fragments to target — all are locked. Unlock some fragments to proceed.")
+        else:
+            st.dataframe(
+                preview_df.style.applymap(highlight_contribution, subset=["Contribution"]),
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        st.markdown("---")
+        run_opt = st.button(
+            "Run Optimizer",
+            type="primary",
+            disabled=preview_df.empty,
+        )
+
+        if run_opt:
+            with st.spinner("Enumerating and scoring candidates… this may take 30–90 s"):
+                try:
+                    opt_result = optimize_molecule(
+                        smiles=selected,
+                        viz_app=viz,
+                        prop_type=prop_type,
+                        direction=opt_direction,
+                        n_worst=n_worst,
+                        max_candidates=max_candidates,
+                        top_k=10,
+                        frag_contributions=frag_contributions,
+                        seed_prediction=prop_prediction,
+                        protected_fragment_indices=protected_indices,
+                    )
+                    st.session_state["opt_result"] = opt_result
+                except Exception as e:
+                    st.error(f"Optimization failed: {e}")
+                    st.exception(e)
+
+        # Display results (persist across reruns via session_state)
+        if "opt_result" in st.session_state:
+            res = st.session_state["opt_result"]
+
+            # Sanity check: invalidate stale results if molecule changed
+            if res.get("seed_smiles") != selected:
+                st.info("Molecule has changed — run the optimizer again.")
+            else:
+                n_eval = res["n_candidates_evaluated"]
+                candidates = res["candidates"]
+                seed_val = res["seed_prediction"]
+
+                n_protected = len(res.get("protected_fragment_indices", set()))
+                lock_note = f" · {n_protected} fragment(s) locked" if n_protected else ""
+                st.success(
+                    f"Evaluated **{n_eval}** candidates "
+                    f"({res.get('n_eligible_fragments', '?')} eligible fragments{lock_note}). "
+                    f"Top {len(candidates)} shown below."
+                )
+
+                if not candidates:
+                    st.warning(
+                        "No valid swap candidates were found. This can happen for single-fragment "
+                        "molecules, fully locked scaffolds, or when no BRICS-compatible library "
+                        "alternatives exist for the eligible fragments."
+                    )
+                else:
+                    # Summary metrics
+                    best = candidates[0]
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Seed prediction", f"{seed_val:.4f}")
+                    m2.metric(
+                        "Best candidate",
+                        f"{best['prediction']:.4f}",
+                        delta=f"{best['delta']:+.4f}",
+                    )
+                    m3.metric("Candidates improved", str(sum(1 for c in candidates if c["improvement"] > 0)))
+
+                    st.markdown("---")
+                    st.subheader("Ranked Candidates")
+
+                    # Build results table
+                    df_results = pd.DataFrame(candidates)
+                    df_results.index += 1
+                    df_results.columns = ["SMILES", "Prediction", "Δ vs Seed", "Improvement"]
+
+                    st.dataframe(
+                        df_results.style.applymap(
+                            highlight_contribution, subset=["Δ vs Seed"]
+                        ).background_gradient(subset=["Improvement"], cmap="RdYlGn"),
+                        use_container_width=True,
+                    )
+
+                    st.markdown("---")
+                    st.subheader("Top Candidate Structures")
+
+                    # Draw top candidates in a grid (up to 6)
+                    top_n = min(6, len(candidates))
+                    cols_per_row = 3
+                    for row_start in range(0, top_n, cols_per_row):
+                        row_cols = st.columns(cols_per_row)
+                        for col_idx, cand_idx in enumerate(range(row_start, min(row_start + cols_per_row, top_n))):
+                            cand = candidates[cand_idx]
+                            img = mol_to_image(cand["smiles"], width=260, height=180)
+                            with row_cols[col_idx]:
+                                delta_sign = "+" if cand["delta"] >= 0 else ""
+                                st.markdown(
+                                    f"**#{cand_idx + 1}** &nbsp; "
+                                    f"pred={cand['prediction']:.3f} &nbsp; "
+                                    f"Δ={delta_sign}{cand['delta']:.3f}"
+                                )
+                                if img:
+                                    st.image(img, use_column_width=True)
+                                st.code(cand["smiles"], language=None)
 
 except Exception as e:
     st.error(f"❌ Error calculating contributions: {str(e)}")

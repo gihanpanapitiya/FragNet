@@ -346,5 +346,12 @@ bash start_api.sh        # serves React from /  and API from /api/*
 The compiled assets are written to `frontend/dist/` and served as static files
 by FastAPI.
 
+### Notebook demonstrating the optimization
+
+```
+fragnet/notebooks/optimizer_demo.ipynb
+```
+
+
 
 
