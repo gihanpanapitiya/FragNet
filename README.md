@@ -256,11 +256,21 @@ fragnet/exps/ft/lipo/fragnet_hpdl_exp1s_pt4_30/ft_100.pt
 ```
 These paths are configured in `fragnet/api/dependencies.py`.
 
-**API key** — LLM-assisted suggestions use Claude via the Anthropic API.
-Add your key to `.env` in the project root (already git-ignored):
+**Environment file** — copy the example and fill in your values:
+```bash
+cp .env.example .env
 ```
-ANTHROPIC_API_KEY=sk-ant-...
-```
+`.env` is listed in `.gitignore` and must never be committed. The file contains:
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes (for LLM tab) | Anthropic API key — get one at console.anthropic.com |
+| `FRAGNET_LIBRARY_PKL` | No | Path to the fragment library pickle (default: `chembl_library.pkl`) |
+| `FRAGNET_LIBRARY_SOURCE` | No | `auto` (default) \| `chembl` \| `reference` — see Fragment library section |
+| `FRAGNET_CONTRIBUTION_PRIOR` | No | `false` (default) \| `true` — enable contribution-ranked replacement ordering |
+
+The backend reads `.env` from the project root on startup via `python-dotenv`.
+See `.env.example` for descriptions of all options.
 
 ---
 
