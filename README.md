@@ -228,18 +228,113 @@ This will start the app at [http://localhost:8501](http://localhost:8501).
 
 **Note:** The Dockerfile installs required system libraries (e.g., `libxrender1`, `libxext6`) and Python build tools for compatibility with scientific packages. If you encounter missing library errors, install the relevant system package in the Dockerfile.
 
+## Running the Visualizer with Optimizer
 
-<br/>
-<h1 style="text-align:center;">Disclaimer</h1>
- 
-This material was prepared as an account of work sponsored by an agency of the United States Government.  Neither the United States Government nor the United States Department of Energy, nor Battelle, nor any of their employees, nor any jurisdiction or organization that has cooperated in the development of these materials, makes any warranty, express or implied, or assumes any legal liability or responsibility for the accuracy, completeness, or usefulness or any information, apparatus, product, software, or process disclosed, or represents that its use would not infringe privately owned rights.
-Reference herein to any specific commercial product, process, or service by trade name, trademark, manufacturer, or otherwise does not necessarily constitute or imply its endorsement, recommendation, or favoring by the United States Government or any agency thereof, or Battelle Memorial Institute. The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof.
-PACIFIC NORTHWEST NATIONAL LABORATORY
-operated by
-BATTELLE
-for the
-UNITED STATES DEPARTMENT OF ENERGY
-under Contract DE-AC05-76RL01830
+The web application pairs a React frontend with a FastAPI backend. Both must run
+simultaneously. All commands are run from the **project root** (`FragNet/`).
+
+### Prerequisites
+
+**Python environment** (same environment used to install FragNet):
+```bash
+pip install fastapi uvicorn python-dotenv
+```
+
+**Node.js** (v18+ recommended):
+```bash
+cd frontend
+npm install       # installs React, Vite, Mantine, etc.
+cd ..
+```
+
+**Model checkpoints** — the API expects fine-tuned weights at:
+```
+fragnet/exps/ft/pnnl_full/fragnet_hpdl_exp1s_h4pt4_10/config_exp100.yaml  (Solubility)
+fragnet/exps/ft/pnnl_full/fragnet_hpdl_exp1s_h4pt4_10/ft_100.pt
+fragnet/exps/ft/lipo/fragnet_hpdl_exp1s_pt4_30/config_exp100.yaml          (Lipophilicity)
+fragnet/exps/ft/lipo/fragnet_hpdl_exp1s_pt4_30/ft_100.pt
+```
+These paths are configured in `fragnet/api/dependencies.py`.
+
+**API key** — LLM-assisted suggestions use Claude via the Anthropic API.
+Add your key to `.env` in the project root (already git-ignored):
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+---
+
+### Starting the app
+
+Open two terminals, both from the project root:
+
+**Terminal 1 — API backend** (port 8000):
+```bash
+bash start_api.sh
+```
+This activates the Python environment and starts Uvicorn with hot-reload enabled.
+You should see `Uvicorn running on http://0.0.0.0:8000`. The first request to each
+property type will take a few seconds while the model checkpoint loads; subsequent
+requests are fast (model is cached per property).
+
+**Terminal 2 — Frontend dev server** (port 5173):
+```bash
+cd frontend
+npm run dev
+```
+Vite proxies all `/api/*` requests to the backend automatically, so no CORS
+configuration is needed during development.
+
+Open **http://localhost:5173** in your browser.
+
+---
+
+### Using the app
+
+1. **Enter a SMILES string** in the input box, select a property
+   (*Solubility* or *Lipophilicity*), and click **Analyze**.
+
+2. The **Analysis panel** shows:
+   - Predicted property value (logS or logP)
+   - Interactive molecule SVG colour-coded by fragment
+   - Per-fragment contribution scores — click any fragment to lock/unlock it
+   - Tabbed views for atom, bond, fragment, and connection attributions
+
+3. Switch to the **Optimizer tab** to run fragment swaps:
+   - Set the optimization direction (*maximize* / *minimize*)
+   - Locked fragments (clicked in step 2) are preserved as a protected core
+   - Click **Optimize** — the backend enumerates BRICS-compatible replacements
+     for the worst-contributing fragment and re-scores every candidate with FragNet
+   - Candidates are returned ranked by Δ (improvement over the seed)
+
+4. The **LLM Suggestions** button sends the fragment attribution context to Claude,
+   which proposes modifications from a medicinal chemistry perspective.
+   Requires `ANTHROPIC_API_KEY` to be set.
+
+---
+
+### Fragment library
+
+The optimizer draws replacements from `chembl_library.pkl` (1,313 drug-like BRICS
+fragments from ChEMBL + FDA drugs). If the file is missing it falls back to a
+small built-in reference set. To regenerate the library from scratch:
+
+```bash
+python fetch_chembl.py              # → chembl_druglike.csv  (~3000 molecules)
+python build_chembl_library.py      # → chembl_library.pkl   (1,313 fragments)
+```
+
+---
+
+### Production build
+
+To serve the app from a single process (API serves the compiled frontend):
+```bash
+cd frontend && npm run build && cd ..
+bash start_api.sh        # serves React from /  and API from /api/*
+```
+The compiled assets are written to `frontend/dist/` and served as static files
+by FastAPI.
 
 
 
