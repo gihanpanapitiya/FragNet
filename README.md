@@ -1,4 +1,6 @@
-# FragNet
+<p align="center">
+  <img src="fragnet/vizualize/assets/logo.svg" alt="FragNet logo" width="420"/>
+</p>
 
 FragNet is a Graph Neural Network designed for molecular property prediction, that can offer insights into how different substructures influence the predictions. More details of FragNet can be found in our paper,
 

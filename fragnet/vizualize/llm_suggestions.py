@@ -9,6 +9,7 @@ The caller is responsible for scoring the returned SMILES with FragNet.
 """
 import json
 import os
+import re
 
 from rdkit import Chem
 
@@ -155,8 +156,11 @@ Respond with ONLY a valid JSON array and nothing else:
     )
     raw = message.content[0].text.strip()
 
-    # Extract JSON array from response (Claude sometimes adds a preamble)
-    start = raw.find("[")
+    # Extract JSON array from response (Claude sometimes adds a preamble like
+    # "here are suggestions [as requested]:" before the actual JSON).
+    # Match [ followed by { or whitespace+{ to avoid false hits on prose brackets.
+    m = re.search(r'\[\s*\{', raw)
+    start = m.start() if m else raw.find("[")
     end = raw.rfind("]") + 1
     if start == -1 or end == 0:
         raise RuntimeError(
