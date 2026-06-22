@@ -1,0 +1,188 @@
+/* ── Global ──────────────────────────────────────────────────────────── */
+body {
+    margin: 0;
+    background-color: #f0f2f5;
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────── */
+.fragnet-navbar {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    z-index: 1000;
+}
+
+.smiles-input {
+    font-family: "JetBrains Mono", "Fira Code", "Courier New", monospace !important;
+    font-size: 12px !important;
+    border-radius: 6px !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+    background: rgba(255,255,255,0.12) !important;
+    color: white !important;
+    min-width: 340px;
+}
+.smiles-input::placeholder { color: rgba(255,255,255,0.5) !important; }
+.smiles-input:focus {
+    background: rgba(255,255,255,0.22) !important;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.3) !important;
+}
+
+.prop-radio label { color: white !important; font-size: 13px; margin-right: 12px; }
+.prop-radio .form-check-input { margin-right: 4px; }
+
+/* ── Molecule panel ───────────────────────────────────────────────────── */
+#mol-panel {
+    position: sticky;
+    top: 56px;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid #dee2e6;
+    padding: 12px 10px 16px 10px;
+}
+
+.mol-title {
+    font-size: 12px;
+    color: #6c757d;
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.lock-legend-bar {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+.legend-dot {
+    font-size: 11px;
+    color: #555;
+}
+
+/* ── Tab panel ────────────────────────────────────────────────────────── */
+#tab-panel {
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    background: #f0f2f5;
+}
+
+/* Dash tab overrides */
+.custom-tabs .tab--selected {
+    border-top: 3px solid #2c7be5 !important;
+    font-weight: 600;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.analysis-card {
+    border: none !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
+    margin-bottom: 12px;
+}
+
+.metric-card {
+    border: none !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
+    text-align: center;
+}
+
+.metric-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #2c7be5;
+    line-height: 1.1;
+}
+.metric-label {
+    font-size: 11px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────── */
+.contrib-table td, .contrib-table th {
+    padding: 4px 8px !important;
+    font-size: 12.5px !important;
+    vertical-align: middle !important;
+}
+
+/* ── Mol images ───────────────────────────────────────────────────────── */
+.mol-img {
+    border-radius: 8px;
+    border: 1px solid #e0e4ea;
+    width: 100%;
+}
+
+/* ── Prediction badge ─────────────────────────────────────────────────── */
+.pred-badge {
+    background: rgba(255,255,255,0.18);
+    border-radius: 8px;
+    padding: 4px 14px;
+    color: white;
+    font-weight: 700;
+    font-size: 15px;
+    white-space: nowrap;
+}
+.pred-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+}
+
+/* ── Section headers ──────────────────────────────────────────────────── */
+.section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #495057;
+    margin-bottom: 8px;
+    margin-top: 4px;
+}
+
+/* ── Optimizer settings ───────────────────────────────────────────────── */
+.opt-settings-card {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef !important;
+    border-radius: 8px !important;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+/* ── Candidate cards ──────────────────────────────────────────────────── */
+.candidate-card {
+    border: none !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
+    height: 100%;
+    transition: box-shadow 0.15s ease;
+}
+.candidate-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.16) !important;
+}
+.candidate-header-positive {
+    background: #d4edda !important;
+    color: #155724 !important;
+    font-size: 12px;
+    padding: 6px 10px !important;
+    border-radius: 8px 8px 0 0 !important;
+    font-weight: 600;
+}
+.candidate-header-neutral {
+    background: #e9ecef !important;
+    color: #495057 !important;
+    font-size: 12px;
+    padding: 6px 10px !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+.candidate-smiles {
+    font-family: monospace;
+    font-size: 10px;
+    word-break: break-all;
+    display: block;
+    color: #6c757d;
+    margin-top: 4px;
+}
